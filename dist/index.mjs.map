@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/index.ts"],"sourcesContent":["class Teer {\n  constructor() {\n    console.log('Teer constructor')\n  }\n}\n\nexport { Teer }\n"],"mappings":";AAAA,IAAM,OAAN,MAAW;AAAA,EACT,cAAc;AACZ,YAAQ,IAAI,kBAAkB;AAAA,EAChC;AACF;","names":[]}
