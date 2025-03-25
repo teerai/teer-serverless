@@ -104,7 +104,7 @@ export class TeerExporter implements SpanExporter {
     }
 
     try {
-      this.logDebug(`Spans: ${JSON.stringify(spans, null, 2)}`)
+      this.logDebug(`Spans.count: ${spans.length}`)
 
       console.info(
         'spans.request',
