@@ -1,6 +1,7 @@
 import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { Tracer, trace } from '@opentelemetry/api'
 import { TeerExporter } from './exporter'
+import { version } from '../package.json'
 
 interface TeerTracerEdgeOptions {
   apiKey: string
@@ -13,12 +14,15 @@ export class TeerTracerEdge {
   private provider: BasicTracerProvider
   private tracer: Tracer
   private exporter: TeerExporter
+  // Add version as a static property
+  public static readonly version: string = version
 
   private constructor(options: TeerTracerEdgeOptions) {
     // Create and configure the exporter
     const exporter = new TeerExporter({
       apiKey: options.apiKey,
       debug: options.debug,
+      sdkVersion: TeerTracerEdge.version,
     })
     this.exporter = exporter
 

@@ -8,6 +8,7 @@ interface TelemetryOptions {
   debug?: boolean
   flushInterval?: number
   sdkIntegration?: string
+  sdkVersion?: string
 }
 
 type SerializableSpan = Omit<ReadableSpan, 'spanContext' | 'resource'> & {
@@ -39,6 +40,7 @@ export class TeerExporter implements SpanExporter {
   private readonly debug: boolean = false
   private readonly apiKey?: string
   private readonly endpoint: string = getTeerEndpoint()
+  private readonly sdkVersion: string = 'unknown'
 
   private readonly flushInterval: number = 5000
   private readonly MAX_QUEUE_SIZE = 1000
@@ -56,11 +58,12 @@ export class TeerExporter implements SpanExporter {
     this.debug = options.debug ?? false
     this.apiKey = options.apiKey
     this.flushInterval = options.flushInterval ?? 5000
+    this.sdkVersion = options.sdkVersion ?? 'unknown'
 
     this.startFlushInterval()
     TeerExporter.instance = this
 
-    this.logDebug('TeerExporter initialized', this.endpoint)
+    this.logDebug(`TeerExporter initialized: `, this.endpoint)
   }
 
   private startFlushInterval(): void {
@@ -215,6 +218,6 @@ export class TeerExporter implements SpanExporter {
 
   private logDebug(message: string, ...args: any[]): void {
     if (!this.debug) return
-    console.log(`[${new Date().toISOString()}] [TeerExporter] ${message}`, ...args)
+    console.log(`[${new Date().toISOString()}] [TeerExporter v${this.sdkVersion}] ${message}`, ...args)
   }
 }
