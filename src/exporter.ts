@@ -98,8 +98,10 @@ export class TeerExporter implements SpanExporter {
       throw new Error('API key is required')
     }
 
-    const usage = reduceSpansUsage(spans)
-    this.logDebug(`📊 Model usage stats: ${usage.input} input + ${usage.output} output = ${usage.total} total tokens`)
+    if (this.debug) {
+      const usage = reduceSpansUsage(spans)
+      this.logDebug(`📊 Model usage stats: ${usage.input} input + ${usage.output} output = ${usage.total} total tokens`)
+    }
 
     try {
       this.logDebug(`Spans: ${JSON.stringify(spans, null, 2)}`)
