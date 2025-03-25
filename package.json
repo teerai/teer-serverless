@@ -1,5 +1,5 @@
 {
-  "name": "@teer/serverless",
+  "name": "@teerai/serverless",
   "version": "0.1.0",
   "description": "Telemetry library for serverless environments",
   "main": "dist/index.js",
