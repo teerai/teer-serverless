@@ -106,23 +106,6 @@ export class TeerExporter implements SpanExporter {
     try {
       this.logDebug(`Spans.count: ${spans.length}`)
 
-      console.info(
-        'spans.request',
-        JSON.stringify(
-          {
-            url: this.endpoint,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${this.apiKey}`,
-            },
-            spans: spans.length,
-          },
-          null,
-          2
-        )
-      )
-
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: {
