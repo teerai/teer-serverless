@@ -1,3 +1,3 @@
 export const getTeerEndpoint = () => {
-  return `http://track.teer.ai${process.env.NODE_ENV === 'development' ? ':5171' : ''}/v1/spans/bulk`
+  return process.env.NODE_ENV === 'development' ? 'http://track.teer.ai:5171/v1/spans/bulk' : 'https://track.teer.ai/v1/spans/bulk'
 }

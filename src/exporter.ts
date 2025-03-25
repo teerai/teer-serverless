@@ -60,7 +60,7 @@ export class TeerExporter implements SpanExporter {
     this.startFlushInterval()
     TeerExporter.instance = this
 
-    this.logDebug('TeerExporter initialized')
+    this.logDebug('TeerExporter initialized', this.endpoint)
   }
 
   private startFlushInterval(): void {
@@ -76,7 +76,12 @@ export class TeerExporter implements SpanExporter {
   }
 
   private async flush(): Promise<void> {
-    if (this.spanQueue.length === 0 || this.activeFlush) {
+    if (this.spanQueue.length === 0) {
+      this.logDebug('No spans to flush or active flush already in progress')
+      return
+    }
+    if (this.activeFlush) {
+      this.logDebug('Active flush already in progress, skipping')
       return
     }
 
