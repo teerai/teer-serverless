@@ -1,7 +1,53 @@
-class Teer {
-  constructor() {
-    console.log('Teer constructor')
-  }
+import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import { Tracer, trace } from '@opentelemetry/api'
+import { TeerExporter } from './exporter'
+
+interface TeerTracerEdgeOptions {
+  apiKey: string
+  debug?: boolean
+  flushInterval?: number
 }
 
-export { Teer }
+export class TeerTracerEdge {
+  private static instance: TeerTracerEdge | null = null
+  private provider: BasicTracerProvider
+  private tracer: Tracer
+  private exporter: TeerExporter
+
+  private constructor(options: TeerTracerEdgeOptions) {
+    // Create and configure the exporter
+    const exporter = new TeerExporter({
+      apiKey: options.apiKey,
+      debug: options.debug,
+    })
+    this.exporter = exporter
+
+    // Add the exporter to the provider
+    this.provider = new BasicTracerProvider({
+      spanProcessors: [new BatchSpanProcessor(exporter)],
+      forceFlushTimeoutMillis: options.flushInterval,
+    })
+
+    // Register the provider
+    trace.setGlobalTracerProvider(this.provider)
+
+    // Get the tracer
+    this.tracer = this.provider.getTracer('ai')
+  }
+
+  public static getInstance(options: TeerTracerEdgeOptions): TeerTracerEdge {
+    if (!TeerTracerEdge.instance) {
+      TeerTracerEdge.instance = new TeerTracerEdge(options)
+    }
+    return TeerTracerEdge.instance
+  }
+
+  public getTracer(): Tracer {
+    return this.tracer
+  }
+
+  public async shutdown(): Promise<void> {
+    await this.provider.shutdown()
+    TeerTracerEdge.instance = null
+  }
+}
