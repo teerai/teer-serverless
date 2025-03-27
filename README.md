@@ -1,6 +1,6 @@
 # Teer serverless
 
-npm login
+[@teerai/serverless](https://www.npmjs.com/package/@teerai/serverless)
 
 ## Usage
 
