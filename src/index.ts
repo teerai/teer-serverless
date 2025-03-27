@@ -1,57 +1,91 @@
-import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
-import { Tracer, trace } from '@opentelemetry/api'
-import { TeerExporter } from './exporter'
+import { WebTracerProvider } from '@opentelemetry/sdk-trace-web'
+import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import type { Tracer } from '@opentelemetry/api'
+import { TeerEdgeExporter } from './exporter'
+import type { TeerEdgeOptions } from '~/types'
 import { version } from '../package.json'
 
-interface TeerTracerEdgeOptions {
-  apiKey: string
-  debug?: boolean
-  flushInterval?: number
-}
+export class TeerEdge {
+  private static instance: TeerEdge | null = null
+  private readonly provider: WebTracerProvider
+  private readonly tracer: Tracer
+  private readonly exporter: TeerEdgeExporter
+  private readonly debug: boolean
+  private isShuttingDown = false
 
-export class TeerTracerEdge {
-  private static instance: TeerTracerEdge | null = null
-  private provider: BasicTracerProvider
-  private tracer: Tracer
-  private exporter: TeerExporter
-  // Add version as a static property
-  public static readonly version: string = version
+  public static readonly sdkVersion: string = version
+  public static readonly otelVersion: string = '2.0.0'
+  public static readonly endpoint: string =
+    process.env.NODE_ENV === 'development' ? 'https://internal/v1/spans/bulk' : 'https://track.teer.ai/v1/spans/bulk'
+  public static readonly instrumentationScopeName: string = 'teer-sdk'
 
-  private constructor(options: TeerTracerEdgeOptions) {
-    // Create and configure the exporter
-    const exporter = new TeerExporter({
+  private constructor(options: TeerEdgeOptions) {
+    this.debug = options.debug ?? false
+    this.exporter = new TeerEdgeExporter({
+      endpoint: TeerEdge.endpoint,
+      sdkVersion: TeerEdge.sdkVersion,
+      otelVersion: TeerEdge.otelVersion,
       apiKey: options.apiKey,
-      debug: options.debug,
-      sdkVersion: TeerTracerEdge.version,
-    })
-    this.exporter = exporter
-
-    // Add the exporter to the provider
-    this.provider = new BasicTracerProvider({
-      spanProcessors: [new BatchSpanProcessor(exporter)],
-      forceFlushTimeoutMillis: options.flushInterval,
+      debug: this.debug,
+      flushInterval: options.flushInterval,
+      customFetch: options.customFetch,
+      onExport: options.onExport,
     })
 
-    // Register the provider
-    trace.setGlobalTracerProvider(this.provider)
+    this.provider = new WebTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(this.exporter)],
+    })
 
-    // Get the tracer
-    this.tracer = this.provider.getTracer('ai')
+    this.provider.register()
+
+    this.tracer = this.provider.getTracer(TeerEdge.instrumentationScopeName)
   }
 
-  public static getInstance(options: TeerTracerEdgeOptions): TeerTracerEdge {
-    if (!TeerTracerEdge.instance) {
-      TeerTracerEdge.instance = new TeerTracerEdge(options)
+  public static getInstance(options: TeerEdgeOptions): TeerEdge {
+    if (!TeerEdge.instance) {
+      TeerEdge.instance = new TeerEdge(options)
     }
-    return TeerTracerEdge.instance
+    return TeerEdge.instance
+  }
+
+  public static getTracer(options: TeerEdgeOptions): Tracer {
+    return TeerEdge.getInstance(options).getTracer()
+  }
+
+  public static async shutdown(): Promise<void> {
+    if (!TeerEdge.instance) {
+      return
+    }
+
+    // Flush any pending spans
+    await TeerEdge.instance.exporter.forceFlush()
+
+    // Shutdown tracer provider
+    await TeerEdge.instance.shutdownProvider()
   }
 
   public getTracer(): Tracer {
     return this.tracer
   }
 
-  public async shutdown(): Promise<void> {
-    await this.provider.shutdown()
-    TeerTracerEdge.instance = null
+  public async shutdownProvider(): Promise<void> {
+    if (this.isShuttingDown) {
+      this.logDebug('Shutdown already in progress')
+      return
+    }
+
+    this.isShuttingDown = true
+
+    try {
+      await this.provider.shutdown()
+      TeerEdge.instance = null
+    } finally {
+      this.isShuttingDown = false
+    }
+  }
+
+  private logDebug(message: string, ...args: any[]): void {
+    if (!this.debug) return
+    console.log(`[${new Date().toISOString()}] [TeerEdge v${TeerEdge.sdkVersion}] ${message}`, ...args)
   }
 }

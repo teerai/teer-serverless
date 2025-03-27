@@ -1,69 +1,52 @@
 import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base'
 import type { ExportResult } from '@opentelemetry/core'
-import { getTeerEndpoint } from './const'
+import type { TeerEdgeExporterOptions } from '~/types'
+import { CODE } from '~/const'
 
-interface TelemetryOptions {
-  apiKey?: string
-  endpoint?: string
-  debug?: boolean
-  flushInterval?: number
-  sdkIntegration?: string
-  sdkVersion?: string
-}
-
-type SerializableSpan = Omit<ReadableSpan, 'spanContext' | 'resource'> & {
-  spanContext: {
-    spanId: string
-    traceId: string
-    traceFlags: number
-  }
-}
-
-function reduceSpansUsage(spans: SerializableSpan[]) {
-  return spans.reduce(
-    (memo, span) => {
-      memo.input += Number(span.attributes['gen_ai.usage.input_tokens']) || 0
-      memo.output += Number(span.attributes['gen_ai.usage.output_tokens']) || 0
-
-      return memo
-    },
-    {
-      input: 0,
-      output: 0,
-      total: 0,
-    }
-  )
-}
-
-export class TeerExporter implements SpanExporter {
-  private static instance: TeerExporter | null = null
-  private readonly debug: boolean = false
+/**
+ * OpenTelemetry span exporter optimized for Edge environments.
+ *
+ * - Queue: ordered span queue between exports with size limits to prevent memory issues
+ * - Batches: Groups spans into right-sized batches for efficient network usage
+ * - Flush on interval: flushes queued spans rather than waiting for export calls
+ * - Shutdown: Ensures pending spans are sent before termination
+ * - Errors: Failed batches are re-queued while maintaining span order
+ * - Concurrency: Prevents overlapping flushes and network race conditions
+ */
+export class TeerEdgeExporter implements SpanExporter {
+  private readonly endpoint: string
   private readonly apiKey?: string
-  private readonly endpoint: string = getTeerEndpoint()
-  private readonly sdkVersion: string = 'unknown'
+  private readonly debug: boolean
+  private readonly batchSize: number
+  private readonly flushInterval: number
+  private readonly fetchImpl: typeof fetch
+  private readonly onExport: (spans: ReadableSpan[]) => void = () => {}
 
-  private readonly flushInterval: number = 5000
-  private readonly MAX_QUEUE_SIZE = 1000
-
-  private spanQueue: SerializableSpan[] = []
+  private spanQueue: ReadableSpan[] = []
   private flushIntervalId: ReturnType<typeof setInterval> | null = null
-  private isShuttingDown = false
   private activeFlush: Promise<void> | null = null
+  private isShuttingDown = false
 
-  constructor(options: TelemetryOptions = {}) {
-    if (TeerExporter.instance) {
-      return TeerExporter.instance
-    }
+  private readonly sdkVersion: string
+  private readonly otelVersion: string
 
-    this.debug = options.debug ?? false
+  private static readonly MAX_QUEUE_SIZE = 1000
+  private static readonly DEFAULT_FLUSH_INTERVAL = 5000
+  private static readonly DEFAULT_BATCH_SIZE = 10
+
+  constructor(options: TeerEdgeExporterOptions) {
+    this.endpoint = options.endpoint
     this.apiKey = options.apiKey
-    this.flushInterval = options.flushInterval ?? 5000
-    this.sdkVersion = options.sdkVersion ?? 'unknown'
+    this.debug = options.debug ?? false
+    this.batchSize = options.batchSize ?? TeerEdgeExporter.DEFAULT_BATCH_SIZE
+    this.flushInterval = options.flushInterval ?? TeerEdgeExporter.DEFAULT_FLUSH_INTERVAL
+    this.fetchImpl = options.customFetch ?? fetch
+    this.onExport = options.onExport ?? (() => {})
+    this.sdkVersion = options.sdkVersion
+    this.otelVersion = options.otelVersion
 
     this.startFlushInterval()
-    TeerExporter.instance = this
-
-    this.logDebug(`TeerExporter initialized: `, this.endpoint)
+    this.logDebug('TeerEdgeExporter initialized:', this.endpoint)
   }
 
   private startFlushInterval(): void {
@@ -78,73 +61,125 @@ export class TeerExporter implements SpanExporter {
     }
   }
 
-  private async flush(): Promise<void> {
-    if (this.spanQueue.length === 0) {
-      this.logDebug('No spans to flush or active flush already in progress')
-      return
-    }
-    if (this.activeFlush) {
-      this.logDebug('Active flush already in progress, skipping')
-      return
-    }
-
-    const spans = this.spanQueue.slice(0, this.MAX_QUEUE_SIZE)
-    this.spanQueue = this.spanQueue.slice(spans.length)
-
-    this.logDebug(`Flushing ${spans.length} spans`)
+  async export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> {
+    this.logDebug('Queueing spans for export', spans.length)
 
     try {
-      this.activeFlush = this.sendSpans(spans)
+      this.onExport(spans)
+      this.spanQueue.push(...spans)
+
+      // Trim queue if it exceeds max size
+      if (this.spanQueue.length > TeerEdgeExporter.MAX_QUEUE_SIZE) {
+        this.spanQueue = this.spanQueue.slice(-TeerEdgeExporter.MAX_QUEUE_SIZE)
+        this.logDebug('Queue exceeded max size, trimming older spans')
+      }
+
+      resultCallback({ code: CODE.SUCCESS })
+    } catch (error) {
+      this.logDebug('Export error', error)
+      resultCallback({
+        code: CODE.ERROR,
+        error: error instanceof Error ? error : new Error(String(error)),
+      })
+    }
+  }
+
+  private async flush(): Promise<void> {
+    if (this.spanQueue.length === 0 || this.activeFlush) {
+      return
+    }
+
+    const batchesToProcess = this.createBatches(this.spanQueue, this.batchSize)
+    this.spanQueue = []
+
+    try {
+      this.activeFlush = this.processBatches(batchesToProcess)
       await this.activeFlush
     } finally {
       this.activeFlush = null
     }
   }
 
-  private async sendSpans(spans: SerializableSpan[]): Promise<void> {
-    if (!this.apiKey) {
-      throw new Error('API key is required')
-    }
-
-    if (this.debug) {
-      const usage = reduceSpansUsage(spans)
-      this.logDebug(`📊 Model usage stats: ${usage.input} input + ${usage.output} output = ${usage.total} total tokens`)
-    }
-
-    try {
-      this.logDebug(`Spans.count: ${spans.length}`)
-
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({ spans }),
-      })
-
-      console.log('response.ok?', response.ok)
-      if (!response.ok) {
-        const errorResponse = await response.json()
-        this.logDebug(`Error flushing spans`, JSON.stringify(errorResponse, null, 2))
-
-        throw new Error(`HTTP error: ${response.status} ${errorResponse.message}`)
+  private async processBatches(batches: ReadableSpan[][]): Promise<void> {
+    for (const batch of batches) {
+      try {
+        await this.sendBatch(batch)
+      } catch (error) {
+        this.logDebug('Batch export failed, re-queueing spans', error)
+        // Re-queue failed spans at the start to maintain order
+        this.spanQueue.unshift(...batch)
+        throw error
       }
-
-      this.logDebug(`Successfully flushed ${spans.length} spans`)
-    } catch (error) {
-      this.logDebug('Error flushing spans, will retry in next flush cycle', error)
-      // Put spans back in the queue
-      this.spanQueue = [...spans, ...this.spanQueue]
-      throw error
     }
   }
 
-  private enqueueSerializableSpans(spans: ReadableSpan[]): void {
-    for (const span of spans) {
+  async shutdown(): Promise<void> {
+    this.logDebug('Shutting down exporter')
+    this.isShuttingDown = true
+
+    if (this.flushIntervalId) {
+      clearInterval(this.flushIntervalId)
+      this.flushIntervalId = null
+    }
+
+    // Wait for active flush and process remaining spans
+    if (this.activeFlush) {
+      await this.activeFlush
+    }
+    await this.flush()
+  }
+
+  async forceFlush(): Promise<void> {
+    this.logDebug('Force flushing exporter')
+
+    if (this.activeFlush) {
+      await this.activeFlush
+    }
+
+    await this.flush()
+  }
+
+  private async sendBatch(spans: ReadableSpan[]): Promise<void> {
+    const payload = this.convertSpansToPayload(spans)
+    this.logDebug(`Sending batch to ${this.endpoint}`, spans.length)
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    }
+
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`
+    }
+
+    const response = await this.fetchImpl(this.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ spans: payload }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.json()
+      throw new Error(`Failed to export spans: ${response.status} ${JSON.stringify(errorText, null, 2)}`)
+    }
+
+    this.logDebug('Successfully exported batch', spans.length)
+  }
+
+  private createBatches(spans: ReadableSpan[], batchSize: number): ReadableSpan[][] {
+    const batches: ReadableSpan[][] = []
+    for (let i = 0; i < spans.length; i += batchSize) {
+      batches.push(spans.slice(i, i + batchSize))
+    }
+    return batches
+  }
+
+  private convertSpansToPayload(spans: ReadableSpan[]): any[] {
+    return spans.map((span) => {
       const context = span.spanContext()
 
-      this.spanQueue.push({
+      return {
+        sdkVersion: this.sdkVersion,
+        otelVersion: this.otelVersion,
         name: span.name,
         kind: span.kind,
         startTime: span.startTime,
@@ -155,69 +190,22 @@ export class TeerExporter implements SpanExporter {
         events: span.events,
         duration: span.duration,
         ended: span.ended,
-        // Note: resource has some subkeys which are not serializable but we could prune them and use the string values?
-        // resource: span.resource,
         instrumentationScope: span.instrumentationScope,
         droppedAttributesCount: span.droppedAttributesCount,
         droppedEventsCount: span.droppedEventsCount,
         droppedLinksCount: span.droppedLinksCount,
-        // Context add-ons
         parentSpanContext: span.parentSpanContext,
         spanContext: {
           spanId: context.spanId,
           traceId: context.traceId,
           traceFlags: context.traceFlags,
         },
-      })
-    }
-  }
-
-  async export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): Promise<void> {
-    this.logDebug(`Exporting ${spans.length} spans`)
-
-    try {
-      this.enqueueSerializableSpans(spans)
-
-      resultCallback({ code: 0 })
-    } catch (error) {
-      this.logDebug('Error exporting spans', error)
-      resultCallback({
-        code: 1,
-        error: error instanceof Error ? error : new Error('Unknown error exporting spans'),
-      })
-    }
-  }
-
-  async shutdown(): Promise<void> {
-    this.logDebug('Shutting down')
-    this.isShuttingDown = true
-
-    if (this.flushIntervalId) {
-      clearInterval(this.flushIntervalId)
-      this.flushIntervalId = null
-    }
-
-    // Wait for any active flush to complete and flush remaining spans
-    if (this.activeFlush) {
-      await this.activeFlush
-    }
-    await this.flush()
-
-    TeerExporter.instance = null
-  }
-
-  async forceFlush(): Promise<void> {
-    this.logDebug('Force flushing spans')
-
-    if (this.activeFlush) {
-      await this.activeFlush
-    }
-
-    await this.flush()
+      }
+    })
   }
 
   private logDebug(message: string, ...args: any[]): void {
     if (!this.debug) return
-    console.log(`[${new Date().toISOString()}] [TeerExporter v${this.sdkVersion}] ${message}`, ...args)
+    console.log(`[${new Date().toISOString()}] [TeerEdgeExporter v${this.sdkVersion}] ${message}`, ...args)
   }
 }
