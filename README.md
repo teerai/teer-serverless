@@ -4,40 +4,32 @@
 
 ## Usage
 
-### Tracer OTel V2
+### AI SDK
 
 ```javascript
-const tracer = TeerEdge.getTracer({ apiKey: apiKey.key })
-```
+import { TeerEdge } from '@teerai/serverless'
+import { generateText } from 'ai'
 
-```javascript
-const tracer = TeerEdge.getTracer({
-  apiKey: apiKey.key,
-  debug: true,
-  customFetch: props.context.cloudflare.env.TEER_TRACK.fetch.bind(props.context.cloudflare.env.TEER_TRACK),
-  onExport: (spans) => writeOutSpans(spans, directory, loadContext),
+const anthropic = createAnthropic({
+  apiKey: {{ANTHROPIC_API_KEY}},
 })
-```
-
-### Tracer OTel V1
-
-```javascript
-const exporter = new CloudflareWorkerExporter({
-  endpoint: 'https://internal/v1/spans/bulk',
-  apiKey: apiKey.key,
-  debug: true,
-  customFetch: props.context.cloudflare.env.TEER_TRACK.fetch.bind(props.context.cloudflare.env.TEER_TRACK),
-  onExport: (spans) => writeOutSpans(spans, directory, loadContext),
-})
-
-const provider = new WebTracerProvider({
-  spanProcessors: [new SimpleSpanProcessor(exporter)],
+await generateText({
+  model: anthropic('claude-3-haiku-20240307'),
+  prompt: "What is the capital of Ireland?",
+  /**
+   * Telemetry config
+   * - enable
+   * - pass tracer instance
+   */
+  experimental_telemetry: {
+    isEnabled: true,
+    tracer: TeerEdge.getTracer({ apiKey: apiKey.key }),
+    functionId: 'test',
+    recordInputs: false,
+    recordOutputs: false,
+  }
 })
 
-// Register the provider
-provider.register()
-
-// Get the tracer
-const instrumentationScopeName = 'ai-sdk'
-const tracer = provider.getTracer(instrumentationScopeName)
+// Shutdown async after request completes
+waitUntil(TeerEdge.shutdown())
 ```
