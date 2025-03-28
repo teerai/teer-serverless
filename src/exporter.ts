@@ -40,7 +40,7 @@ export class TeerEdgeExporter implements SpanExporter {
     this.debug = options.debug ?? false
     this.batchSize = options.batchSize ?? TeerEdgeExporter.DEFAULT_BATCH_SIZE
     this.flushInterval = options.flushInterval ?? TeerEdgeExporter.DEFAULT_FLUSH_INTERVAL
-    this.fetchImpl = options.customFetch ?? fetch
+    this.fetchImpl = options.customFetch ?? ((url, init) => fetch(url, init))
     this.onExport = options.onExport ?? (() => {})
     this.sdkVersion = options.sdkVersion
     this.otelVersion = options.otelVersion
