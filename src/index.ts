@@ -52,13 +52,16 @@ export class TeerEdge {
     return TeerEdge.getInstance(options).getTracer()
   }
 
+  public static async forceFlush(): Promise<void> {
+    if (!TeerEdge.instance) return
+    await TeerEdge.instance.exporter.forceFlush()
+  }
+
   public static async shutdown(): Promise<void> {
-    if (!TeerEdge.instance) {
-      return
-    }
+    if (!TeerEdge.instance) return
 
     // Flush any pending spans
-    await TeerEdge.instance.exporter.forceFlush()
+    await TeerEdge.forceFlush()
 
     // Shutdown tracer provider
     await TeerEdge.instance.shutdownProvider()
