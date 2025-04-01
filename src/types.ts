@@ -3,6 +3,7 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
 export interface TeerEdgeOptions {
   /** API key for authentication with Teer backend */
   apiKey: string
+  baseURL?: string
   /** Enable debug logging */
   debug?: boolean
   /** Flush interval in ms (default: 5000) */
