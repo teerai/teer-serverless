@@ -1,8 +1,11 @@
+import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
+import type { Tracer } from '@opentelemetry/api'
+import type { TeerEdgeOptions } from '~/types'
+
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web'
 import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
-import type { Tracer } from '@opentelemetry/api'
 import { TeerEdgeExporter } from './exporter'
-import type { TeerEdgeOptions } from '~/types'
+import { removeTrailingSlash } from './utils'
 import { version } from '../package.json'
 
 export class TeerEdge {
@@ -11,18 +14,25 @@ export class TeerEdge {
   private readonly tracer: Tracer
   private readonly exporter: TeerEdgeExporter
   private readonly debug: boolean
+  private readonly endpoint: string
   private isShuttingDown = false
 
   public static readonly sdkVersion: string = version
   public static readonly otelVersion: string = '2.0.0'
-  public static readonly endpoint: string =
-    process.env.NODE_ENV === 'development' ? 'https://internal/v1/spans/bulk' : 'https://track.teer.ai/v1/spans/bulk'
+  public static readonly namespace: string = 'v1'
+  public static readonly baseURL: string = 'https://track.teer.ai'
+
   public static readonly instrumentationScopeName: string = 'teer-sdk'
 
   private constructor(options: TeerEdgeOptions) {
     this.debug = options.debug ?? false
+    const baseURL = options.baseURL || TeerEdge.baseURL
+    const sanitizedBaseURL = removeTrailingSlash(baseURL)
+    const url = new URL(`${sanitizedBaseURL}/${TeerEdge.namespace}/spans/bulk`)
+    this.endpoint = url.toString()
+
     this.exporter = new TeerEdgeExporter({
-      endpoint: TeerEdge.endpoint,
+      endpoint: this.endpoint,
       sdkVersion: TeerEdge.sdkVersion,
       otelVersion: TeerEdge.otelVersion,
       apiKey: options.apiKey,
@@ -92,3 +102,5 @@ export class TeerEdge {
     console.log(`[${new Date().toISOString()}] [TeerEdge v${TeerEdge.sdkVersion}] ${message}`, ...args)
   }
 }
+
+export type { TeerEdgeOptions, ReadableSpan }
