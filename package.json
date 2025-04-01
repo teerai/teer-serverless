@@ -1,6 +1,6 @@
 {
   "name": "@teerai/serverless",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Telemetry library for serverless environments",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
