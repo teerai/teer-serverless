@@ -19,7 +19,7 @@ export class TeerEdge {
 
   public static readonly sdkVersion: string = version
   public static readonly otelVersion: string = '2.0.0'
-  public static readonly apiVersion: string = 'v1'
+  public static readonly namespace: string = 'v1'
   public static readonly baseURL: string = 'https://track.teer.ai'
 
   public static readonly instrumentationScopeName: string = 'teer-sdk'
@@ -28,7 +28,7 @@ export class TeerEdge {
     this.debug = options.debug ?? false
     const baseURL = options.baseURL || TeerEdge.baseURL
     const sanitizedBaseURL = removeTrailingSlash(baseURL)
-    const url = new URL(`${sanitizedBaseURL}/${TeerEdge.apiVersion}/spans/bulk`)
+    const url = new URL(`${sanitizedBaseURL}/${TeerEdge.namespace}/spans/bulk`)
     this.endpoint = url.toString()
 
     this.exporter = new TeerEdgeExporter({
