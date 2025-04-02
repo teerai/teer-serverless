@@ -52,12 +52,15 @@ For serverless environments, `forceFlush()` is typically sufficient as the runti
 
 ## Best Practices
 
-1. Set appropriate `flushInterval` based on your workload:
+### Flush
 
-- Lower values (1-2s) for burst workloads
-- Higher values (5-10s) for steady workloads
+- Set appropriate `flushInterval` based on your workload:
+  - Lower values (1-2s) for burst workloads
+  - Higher values (5-10s) for steady workloads
 
-2. Enable debug logging during development:
+### Logging
+
+- Enable debug logging during development:
 
 ```typescript
 TeerEdge.getTracer({
@@ -66,9 +69,13 @@ TeerEdge.getTracer({
 })
 ```
 
-3. Use `waitUntil` in edge functions to ensure telemetry is sent:
+### waitUntil
 
-- [Vercel](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil)
+- Use `waitUntil` in edge functions to ensure telemetry is sent:
+
+#### Vercel
+
+- [Docs](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil)
 
 ```typescript
 export function GET(request: Request) {
@@ -78,7 +85,9 @@ export function GET(request: Request) {
 }
 ```
 
-- [Cloudflare Workers](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil)
+#### Cloudflare Workers
+
+- [Docs](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil)
 
 ```typescript
 export default {
