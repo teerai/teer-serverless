@@ -32,14 +32,14 @@ waitUntil(TeerEdge.forceFlush())
 
 ## Configuration Options
 
-| Option          | Type                              | Default                 | Description                                          |
-| --------------- | --------------------------------- | ----------------------- | ---------------------------------------------------- |
-| `apiKey`        | `string`                          | Required                | Authentication key for Teer backend                  |
-| `baseURL`       | `string`                          | `https://track.teer.ai` | Custom endpoint for telemetry data                   |
-| `debug`         | `boolean`                         | `false`                 | Enables detailed debug logging                       |
-| `flushInterval` | `number`                          | `5000`                  | Milliseconds between automatic flush attempts        |
-| `customFetch`   | `typeof fetch`                    | `fetch`                 | Custom fetch implementation for special environments |
-| `onExport`      | `(spans: ReadableSpan[]) => void` | `undefined`             | Hook called before spans are exported                |
+| Option          | Type                              | Required | Default                 | Description                                          |
+| --------------- | --------------------------------- | -------- | ----------------------- | ---------------------------------------------------- |
+| `apiKey`        | `string`                          | true     | -                       | Authentication key for Teer backend                  |
+| `baseURL`       | `string`                          | false    | `https://track.teer.ai` | Custom endpoint for telemetry data                   |
+| `debug`         | `boolean`                         | false    | `false`                 | Enables detailed debug logging                       |
+| `flushInterval` | `number`                          | false    | `5000`                  | Milliseconds between automatic flush attempts        |
+| `customFetch`   | `typeof fetch`                    | false    | `fetch`                 | Custom fetch implementation for special environments |
+| `onExport`      | `(spans: ReadableSpan[]) => void` | false    | `undefined`             | Hook called before spans are exported                |
 
 ## Flush vs Shutdown
 
