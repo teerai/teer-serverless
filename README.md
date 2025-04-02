@@ -1,6 +1,6 @@
 # Teer Serverless
 
-[@teerai/serverless](https://www.npmjs.com/package/@teerai/serverless) is an OTEL compliant tracer optimized for edge and serverless environments, which tracks operations in the [AI-SDK](https://www.npmjs.com/package/ai) and forwards them to Teer for tracking and analytics.
+[@teerai/serverless](https://www.npmjs.com/package/@teerai/serverless) provides an OTEL compliant tracer for the [AI-SDK](https://www.npmjs.com/package/ai). It observes ai operations and forwards them to Teer for tracking and analytics. It is optimized for edge and serverless environments.
 
 ## Quick Start
 
