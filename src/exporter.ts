@@ -1,7 +1,11 @@
 import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base'
 import type { ExportResult } from '@opentelemetry/core'
 import type { TeerEdgeExporterOptions } from '~/types'
-import { CODE } from '~/const'
+
+export const CODE = {
+  SUCCESS: 0,
+  ERROR: 1,
+}
 
 /**
  * OpenTelemetry span exporter optimized for Edge environments.
